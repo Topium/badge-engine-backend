@@ -12,15 +12,26 @@ def hello_world():
 @app.route('/badges', methods=['GET'])
 def get_data():
     cur = mysql.connection.cursor()
-    cur.execute('''SELECT * FROM badges_transform''')
+    cur.execute('''\
+        SELECT * FROM badges\
+        INNER JOIN badges_transform\
+        ON badges.id = badges_transform.badge_id;''')
+    row_headers=[x[0] for x in cur.description]
     data = cur.fetchall()
     cur.close()
-    return jsonify(data)
+    json_data=[]
+    for result in data:
+            json_data.append(dict(zip(row_headers,result)))
+    return jsonify(json_data)
 
 @app.route('/badges/<int:id>', methods=['GET'])
 def get_data_by_id(id):
     cur = mysql.connection.cursor()
-    cur.execute('''SELECT * FROM badges_transform WHERE id = %s''', (id,))
+    cur.execute('''\
+        SELECT * FROM badges\
+        INNER JOIN badges_transform\
+        ON badges.id = badges_transform.badge_id\
+        WHERE badges.id = %s''', (id,))
     data = cur.fetchall()
     cur.close()
     return jsonify(data)
