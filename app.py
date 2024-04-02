@@ -1,13 +1,35 @@
 from flask import Flask, jsonify, request
 from flask_mysqldb import MySQL
+from flask_jwt_extended import create_access_token,get_jwt,get_jwt_identity, \
+                               unset_jwt_cookies, jwt_required, JWTManager
+from flask_cors import CORS
 
 app = Flask(__name__)
 app.config.from_pyfile('settings.py')
+app.config["JWT_SECRET_KEY"] = 'verysecret'
 mysql = MySQL(app)
+jwt = JWTManager(app)
+CORS(app, support_credentials=True)
 
 @app.route('/')
 def hello_world():
     return 'Hello, World!'
+
+@app.route('/token', methods=["POST"])
+def create_token():
+    username = request.json.get("username", None)
+    password = request.json.get("password", None)
+    cur = mysql.connection.cursor()
+    cur.execute('''\
+        SELECT * FROM `badges_users`\
+        WHERE username = %s AND password = %s''', (username, password))
+    if cur.rowcount == 0:
+        response = jsonify({"msg": "Wrong email or password"})
+        return response, 401
+
+    access_token = create_access_token(identity=username)
+    response = jsonify({"username": username, "access_token":access_token})
+    return response
 
 @app.route('/badges', methods=['GET'])
 def get_data():
