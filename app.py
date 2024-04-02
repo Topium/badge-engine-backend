@@ -38,6 +38,10 @@ def get_data():
         SELECT * FROM badges\
         INNER JOIN badges_transform\
         ON badges.id = badges_transform.badge_id;''')
+    if cur.rowcount == 0:
+        response = jsonify({"msg": "No badges found"})
+        return response, 400
+
     row_headers=[x[0] for x in cur.description]
     data = cur.fetchall()
     cur.close()
