@@ -5,11 +5,11 @@ from flask_jwt_extended import create_access_token,get_jwt,get_jwt_identity, \
 from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app, origins='http://localhost:5173', support_credentials=True)
 app.config.from_pyfile('settings.py')
 app.config["JWT_SECRET_KEY"] = 'verysecret'
 mysql = MySQL(app)
 jwt = JWTManager(app)
-CORS(app, support_credentials=True)
 
 @app.route('/')
 def hello_world():
@@ -24,20 +24,34 @@ def create_token():
         SELECT * FROM `badges_users`\
         WHERE username = %s AND password = %s''', (username, password))
     if cur.rowcount == 0:
-        response = jsonify({"msg": "Wrong email or password"})
+        response = jsonify({"msg": "Wrong username or password"})
         return response, 401
 
     access_token = create_access_token(identity=username)
     response = jsonify({"username": username, "access_token":access_token})
     return response
 
+@app.route('/logout', methods=["POST"])
+@jwt_required()
+def logout():
+    response = jsonify({"msg": "logout successful"})
+    unset_jwt_cookies(response)
+    return response
+
 @app.route('/badges', methods=['GET'])
+@jwt_required()
 def get_data():
+    user = get_jwt_identity()
+    print('jwt identity', user)
     cur = mysql.connection.cursor()
     cur.execute('''\
-        SELECT * FROM badges\
-        INNER JOIN badges_transform\
-        ON badges.id = badges_transform.badge_id;''')
+        SELECT b.id, b.badge_name, bt.scale, bt.x_pos, bt.y_pos, bt.badge_url, bu.username\
+        FROM badges AS b\
+        INNER JOIN badges_transform AS bt\
+        ON b.transform_id = bt.id\
+        INNER JOIN badges_users AS bu\
+        ON b.user_id = bu.id\
+        WHERE bu.username = %s''', (user,))
     if cur.rowcount == 0:
         response = jsonify({"msg": "No badges found"})
         return response, 400
@@ -51,12 +65,13 @@ def get_data():
     return jsonify(json_data)
 
 @app.route('/badges/<int:id>', methods=['GET'])
+@jwt_required()
 def get_data_by_id(id):
     cur = mysql.connection.cursor()
     cur.execute('''\
         SELECT * FROM badges\
         INNER JOIN badges_transform\
-        ON badges.id = badges_transform.badge_id\
+        ON badges.transform_id = badges_transform.id\
         WHERE badges.id = %s''', (id,))
     data = cur.fetchall()
     cur.close()
