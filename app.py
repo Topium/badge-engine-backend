@@ -3,6 +3,7 @@ from flask_mysqldb import MySQL
 from flask_jwt_extended import create_access_token,get_jwt,get_jwt_identity, \
                                unset_jwt_cookies, jwt_required, JWTManager
 from flask_cors import CORS
+from passlib.hash import pbkdf2_sha512
 
 app = Flask(__name__)
 CORS(app, origins='http://localhost:5173', support_credentials=True)
@@ -22,14 +23,23 @@ def create_token():
     cur = mysql.connection.cursor()
     cur.execute('''\
         SELECT * FROM `badges_users`\
-        WHERE username = %s AND password = %s''', (username, password))
+        WHERE username = %s;''', (username,))
     if cur.rowcount == 0:
-        response = jsonify({"msg": "Wrong username or password"})
+        cur.close()
+        response = jsonify({"msg": "Wrong password or username"})
         return response, 401
+    
+    data = cur.fetchall()
+    cur.close()
+    db_password = data[0][2]
 
-    access_token = create_access_token(identity=username)
-    response = jsonify({"username": username, "access_token":access_token})
-    return response
+    if pbkdf2_sha512.verify(password, db_password):
+        access_token = create_access_token(identity=username)
+        response = jsonify({"username": username, "access_token":access_token})
+        return response
+    else:
+        response = jsonify({"msg": "Wrong password or username"})
+        return response, 401
 
 @app.route('/logout', methods=["POST"])
 @jwt_required()
