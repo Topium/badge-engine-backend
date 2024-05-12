@@ -87,13 +87,28 @@ def get_data_by_id(id):
     cur.close()
     return jsonify(data)
 
-@app.route('/data', methods=['POST'])
+@app.route('/badges', methods=['POST'])
+@jwt_required()
 def add_data():
+    badge_name = request.json.get('badge_name', None)
+    scale = request.json.get('scale', None)
+    x_pos = request.json.get('x_pos', None)
+    y_pos = request.json.get('y_pos', None)
+    badge_url = request.json.get('badge_url', None)
+    print('name', badge_name, ' x', x_pos, ' y', y_pos, ' scale', scale, ' url', badge_url)
+    user = get_jwt_identity()
+
     cur = mysql.connection.cursor()
-    name = request.json['name']
-    age = request.json['age']
-    cur.execute('''INSERT INTO table_name (name, age) VALUES (%s, %s)''', (name, age))
-    mysql.connection.commit()
+    cur.execute('''SELECT id FROM badges_users WHERE username = %s;''', (user,))
+    if cur.rowcount == 0:
+        cur.close()
+        response = jsonify({"msg": "Username error"})
+        return response, 401
+    
+    data = cur.fetchall()
+    user_id = data[0][0]
+    print('user_id', user_id)
+
     cur.close()
     return jsonify({'message': 'Data added successfully'})
 
