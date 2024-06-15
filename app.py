@@ -1,3 +1,4 @@
+import os
 from flask import Flask, jsonify, request
 from flask_mysqldb import MySQL
 from flask_jwt_extended import create_access_token,get_jwt,get_jwt_identity, \
@@ -5,12 +6,23 @@ from flask_jwt_extended import create_access_token,get_jwt,get_jwt_identity, \
 from flask_cors import CORS
 from passlib.hash import pbkdf2_sha512
 
+from werkzeug.utils import secure_filename
+
+UPLOAD_FOLDER = 'images'
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+
 app = Flask(__name__)
 CORS(app, origins='http://localhost:5173', support_credentials=True)
 app.config.from_pyfile('settings.py')
 app.config["JWT_SECRET_KEY"] = 'verysecret'
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 mysql = MySQL(app)
 jwt = JWTManager(app)
+
+# Check for extensions
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 @app.route('/')
 def hello_world():
@@ -90,12 +102,14 @@ def get_data_by_id(id):
 @app.route('/badges', methods=['POST'])
 @jwt_required()
 def add_data():
-    badge_name = request.json.get('badge_name', None)
-    scale = request.json.get('scale', None)
-    x_pos = request.json.get('x_pos', None)
-    y_pos = request.json.get('y_pos', None)
-    badge_url = request.json.get('badge_url', None)
-    print('name', badge_name, ' x', x_pos, ' y', y_pos, ' scale', scale, ' url', badge_url)
+    print('add data')
+    print(request.form)
+    badge_name = request.form['badge_name']
+    scale = request.form['scale']
+    x_pos = request.form['x_pos']
+    y_pos = request.form['y_pos']
+    # badge_url = request.form['badge_url']
+    print('name', badge_name, ' x', x_pos, ' y', y_pos, ' scale', scale)
     user = get_jwt_identity()
 
     cur = mysql.connection.cursor()
@@ -108,8 +122,22 @@ def add_data():
     data = cur.fetchall()
     user_id = data[0][0]
     print('user_id', user_id)
-
     cur.close()
+
+    # check if the post request has the file part
+    if 'file' not in request.files:
+        print('No file part')
+        return jsonify({'message': 'No file'})
+    file = request.files['file']
+    # If the user does not select a file, the browser submits an
+    # empty file without a filename.
+    if file.filename == '':
+        print('No selected file')
+        return jsonify({'message': 'No selected file'})
+    if file and allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+
     return jsonify({'message': 'Data added successfully'})
 
 @app.route('/data/<int:id>', methods=['PUT'])
