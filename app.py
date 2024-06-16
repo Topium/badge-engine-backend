@@ -1,22 +1,22 @@
 import os
 from flask import Flask, jsonify, request
-from flask_mysqldb import MySQL
 from flask_jwt_extended import create_access_token,get_jwt,get_jwt_identity, \
                                unset_jwt_cookies, jwt_required, JWTManager
 from flask_cors import CORS
 from passlib.hash import pbkdf2_sha512
 
+import pymysql
+db = pymysql.connect(host=os.environ.get('MYSQL_HOST'), user=os.environ.get('MYSQL_USER'), password=os.environ.get('MYSQL_PASSWORD'), database=os.environ.get('MYSQL_DB'))
+
 from werkzeug.utils import secure_filename
 
 UPLOAD_FOLDER = 'images'
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 
 app = Flask(__name__)
 CORS(app, origins='http://localhost:5173', support_credentials=True)
 app.config.from_pyfile('settings.py')
-app.config["JWT_SECRET_KEY"] = 'verysecret'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-mysql = MySQL(app)
 jwt = JWTManager(app)
 
 # Check for extensions
@@ -25,14 +25,15 @@ def allowed_file(filename):
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 @app.route('/')
-def hello_world():
+def root():
+    print(Flask.url_for(app, endpoint='root', _external=True))
     return 'Hello, World!'
 
 @app.route('/token', methods=["POST"])
 def create_token():
     username = request.json.get("username", None)
     password = request.json.get("password", None)
-    cur = mysql.connection.cursor()
+    cur = db.cursor()
     cur.execute('''\
         SELECT * FROM `badges_users`\
         WHERE username = %s;''', (username,))
@@ -65,7 +66,7 @@ def logout():
 def get_data():
     user = get_jwt_identity()
     print('jwt identity', user)
-    cur = mysql.connection.cursor()
+    cur = db.cursor()
     cur.execute('''\
         SELECT b.id, b.badge_name, bt.scale, bt.x_pos, bt.y_pos, bt.badge_url, bu.username\
         FROM badges AS b\
@@ -89,7 +90,7 @@ def get_data():
 @app.route('/badges/<int:id>', methods=['GET'])
 @jwt_required()
 def get_data_by_id(id):
-    cur = mysql.connection.cursor()
+    cur = db.cursor()
     cur.execute('''\
         SELECT * FROM badges\
         INNER JOIN badges_transform\
@@ -112,7 +113,7 @@ def add_data():
     print('name', badge_name, ' x', x_pos, ' y', y_pos, ' scale', scale)
     user = get_jwt_identity()
 
-    cur = mysql.connection.cursor()
+    cur = db.cursor()
     cur.execute('''SELECT id FROM badges_users WHERE username = %s;''', (user,))
     if cur.rowcount == 0:
         cur.close()
@@ -136,25 +137,28 @@ def add_data():
         return jsonify({'message': 'No selected file'})
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
-        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+        local_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file_url = Flask.url_for(app, endpoint='root', _external=True) + local_path
+        file.save(local_path)
+        print(file_url)
 
-    return jsonify({'message': 'Data added successfully'})
+    return jsonify({'message': 'TODO: Badge added successfully'})
 
 @app.route('/data/<int:id>', methods=['PUT'])
 def update_data(id):
-    cur = mysql.connection.cursor()
+    cur = db.cursor()
     name = request.json['name']
     age = request.json['age']
     cur.execute('''UPDATE table_name SET name = %s, age = %s WHERE id = %s''', (name, age, id))
-    mysql.connection.commit()
+    db.commit()
     cur.close()
     return jsonify({'message': 'Data updated successfully'})
 
 @app.route('/data/<int:id>', methods=['DELETE'])
 def delete_data(id):
-    cur = mysql.connection.cursor()
+    cur = db.cursor()
     cur.execute('''DELETE FROM table_name WHERE id = %s''', (id,))
-    mysql.connection.commit()
+    db.commit()
     cur.close()
     return jsonify({'message': 'Data deleted successfully'})
 
