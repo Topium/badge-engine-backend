@@ -1,21 +1,26 @@
 import os
+import pymysql 
+
 from flask import Flask, jsonify, request
 from flask_jwt_extended import create_access_token,get_jwt,get_jwt_identity, \
                                unset_jwt_cookies, jwt_required, JWTManager
 from flask_cors import CORS
 from passlib.hash import pbkdf2_sha512
-
-import pymysql
-db = pymysql.connect(host=os.environ.get('MYSQL_HOST'), user=os.environ.get('MYSQL_USER'), password=os.environ.get('MYSQL_PASSWORD'), database=os.environ.get('MYSQL_DB'))
-
 from werkzeug.utils import secure_filename
 
 UPLOAD_FOLDER = 'images'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+host = os.environ.get('MYSQL_HOST')
+user = os.environ.get('MYSQL_USER')
+password = os.environ.get('MYSQL_PASSWORD')
+database = os.environ.get('MYSQL_DB')
+cors_origin = os.environ.get('CORS_ORIGIN')
+
+db = pymysql.connect(host=host, user=user, password=password, database=database)
 
 app = Flask(__name__)
-CORS(app, origins='http://localhost:5173', support_credentials=True)
-app.config.from_pyfile('settings.py')
+CORS(app, origins=cors_origin, support_credentials=True)
+app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY')
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 jwt = JWTManager(app)
 
